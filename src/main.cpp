@@ -23,6 +23,8 @@
 #include "PeerConnectionManager.h"
 #include "HttpServerRequestHandler.h"
 
+#include "singleton.h"
+
 #if WIN32
 #include "getopt.h"
 #endif

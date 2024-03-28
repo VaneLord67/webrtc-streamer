@@ -1,5 +1,6 @@
 {
-    "urls":{       
+    "urls":{      
+        "my rtsp stream":{"video": "rtsp://rtspstream:57c8d1574d5ef7245b02053366362d0d@zephyr.rtsp.stream/pattern"}, 
 
         "PriceCenterPlaza" : { "video": "rtsp://132.239.12.145/axis-media/media.amp"},
         "Waterford" : { "video": "rtsp://86.44.41.160/axis-media/media.amp", "position":"52.258330,-7.111940"},

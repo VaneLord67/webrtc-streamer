@@ -36,6 +36,9 @@
 
 #include "VideoDecoder.h"
 
+#include "PeerConnectionManager.h"
+#include "singleton.h"
+
 template <typename T>
 class LiveVideoSource : public VideoSourceWithDecoder, public T::Callback
 {
@@ -130,8 +133,37 @@ public:
                 RTC_LOG(LS_VERBOSE) << "LiveVideoSource:onData PPS";
                 m_cfg.insert(m_cfg.end(), buffer + index.start_offset, buffer + index.payload_size + index.payload_start_offset);
             }
-            else if (nalu_type == webrtc::H264::NaluType::kSei) 
+            else if (nalu_type == webrtc::H264::NaluType::kSei)
             {
+                printf("SEI Data:\n");
+                size_t sei_data_len = index.payload_size + index.payload_start_offset - index.start_offset;
+                for (int i = 0; i < sei_data_len; i++) {
+                    printf("%02X ", (buffer + index.start_offset)[i]);
+                }
+                printf("\n");
+                
+                std::unordered_set<std::string> peerid_set;
+                std::string message;
+                PeerConnectionManager::PeerConnectionObserver* observer = nullptr;
+                {
+                    std::lock_guard<std::mutex> peerlock(webRtcServer->m_peerMapMutex);
+                    std::lock_guard<std::mutex> video_stream_lock(webRtcServer->m_video_stream_to_peerid_map_mutex);
+                    auto it = webRtcServer->m_video_stream_to_peerid_map.find((webrtc::VideoTrackSourceInterface*)(this));
+                    if (it != webRtcServer->m_video_stream_to_peerid_map.end())
+                    {
+                        peerid_set = it->second;                        
+                    }
+                    for (std::string peerid : peerid_set) {
+                        auto peer_it = webRtcServer->m_peer_connectionobs_map.find(peerid);
+                        if (peer_it != webRtcServer->m_peer_connectionobs_map.end()) {
+                            observer = peer_it->second;
+                        }
+                        if (observer && !peerid.empty()) {
+                            webrtc::DataBuffer buffer(message);
+                            observer->m_remoteChannel->m_dataChannel->Send(buffer);
+                        }
+                    }
+                }
             }            
             else
             {

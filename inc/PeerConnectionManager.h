@@ -190,10 +190,10 @@ class PeerConnectionManager {
 				RTC_LOG(LS_ERROR) << __PRETTY_FUNCTION__ << " channel:" << m_dataChannel->label() << " msg:" << msg;
 			}
 
-		protected:
+		public:
 			rtc::scoped_refptr<webrtc::DataChannelInterface>    m_dataChannel;
 	};
-
+	public:
 	class PeerConnectionObserver : public webrtc::PeerConnectionObserver {
 		public:
 			PeerConnectionObserver(PeerConnectionManager* peerConnectionManager, const std::string& peerid, const webrtc::PeerConnectionInterface::RTCConfiguration & config)
@@ -302,12 +302,14 @@ class PeerConnectionManager {
 			std::string getPeerId() { return m_peerid; }
 			webrtc::PeerConnectionInterface::IceGatheringState getGatheringState() { return m_gatheringState; }
 
+		public:
+			std::unique_ptr<DataChannelObserver>                     m_remoteChannel;
 		private:
 			PeerConnectionManager*                                   m_peerConnectionManager;
 			const std::string                                        m_peerid;
 			rtc::scoped_refptr<webrtc::PeerConnectionInterface>      m_pc;
 			std::unique_ptr<DataChannelObserver>                     m_localChannel;
-			std::unique_ptr<DataChannelObserver>                     m_remoteChannel;
+			// std::unique_ptr<DataChannelObserver>                     m_remoteChannel;
 			Json::Value                                              m_iceCandidateList;
 			rtc::scoped_refptr<PeerConnectionStatsCollectorCallback> m_statsCallback;
 			std::unique_ptr<VideoSink>                               m_videosink;
@@ -342,7 +344,7 @@ class PeerConnectionManager {
 
 	protected:
 		PeerConnectionObserver*                               CreatePeerConnection(const std::string& peerid);
-		bool                                                  AddStreams(webrtc::PeerConnectionInterface* peer_connection, const std::string & videourl, const std::string & audiourl, const std::string & options);
+		bool                                                  AddStreams(webrtc::PeerConnectionInterface* peer_connection, const std::string & videourl, const std::string & audiourl, const std::string & options, const std::string & peerid);
 		rtc::scoped_refptr<webrtc::VideoTrackSourceInterface> CreateVideoSource(const std::string & videourl, const std::map<std::string,std::string> & opts);
 		rtc::scoped_refptr<webrtc::AudioSourceInterface>      CreateAudioSource(const std::string & audiourl, const std::map<std::string,std::string> & opts);
 		bool                                                  streamStillUsed(const std::string & streamLabel);
@@ -365,8 +367,6 @@ class PeerConnectionManager {
 		rtc::scoped_refptr<webrtc::AudioDeviceModule>                             m_audioDeviceModule;
   		std::unique_ptr<webrtc::VideoDecoderFactory>                              m_video_decoder_factory;
 		rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface>                m_peer_connection_factory;
-		std::mutex                                                                m_peerMapMutex;
-		std::map<std::string, PeerConnectionObserver* >                           m_peer_connectionobs_map;
 		std::map<std::string, AudioVideoPair>                                     m_stream_map;
 		std::mutex                                                                m_streamMapMutex;
 		std::list<std::string>                                                    m_iceServerList;
@@ -379,5 +379,13 @@ class PeerConnectionManager {
 		bool                                                                      m_usePlanB;
 		int                                                                       m_maxpc;
 		webrtc::PeerConnectionInterface::IceTransportsType                        m_transportType;
+	public:
+		// custom
+		// std::map<std::string, rtc::scoped_refptr<webrtc::VideoTrackSourceInterface>> m_peerid_to_video_stream_map;
+		// std::mutex m_peerid_to_video_stream_map_mutex;
+		std::map<std::string, PeerConnectionObserver* > m_peer_connectionobs_map;
+		std::mutex m_peerMapMutex;
+		std::map<webrtc::VideoTrackSourceInterface*, std::unordered_set<std::string>> m_video_stream_to_peerid_map;
+		std::mutex m_video_stream_to_peerid_map_mutex;
 };
 

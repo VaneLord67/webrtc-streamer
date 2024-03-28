@@ -658,7 +658,7 @@ const Json::Value PeerConnectionManager::createOffer(const std::string &peerid, 
 	{
 		rtc::scoped_refptr<webrtc::PeerConnectionInterface> peerConnection = peerConnectionObserver->getPeerConnection();
 
-		if (!this->AddStreams(peerConnection.get(), videourl, audiourl, options))
+		if (!this->AddStreams(peerConnection.get(), videourl, audiourl, options, peerid))
 		{
 			RTC_LOG(LS_WARNING) << "Can't add stream";
 		}
@@ -806,7 +806,7 @@ std::unique_ptr<webrtc::SessionDescriptionInterface> PeerConnectionManager::getA
 		}
 		
 		// add local stream
-		if (!this->AddStreams(peerConnection.get(), videourl, audiourl, options))
+		if (!this->AddStreams(peerConnection.get(), videourl, audiourl, options, peerid))
 		{
 			RTC_LOG(LS_WARNING) << "Can't add stream";
 		}
@@ -960,10 +960,29 @@ const Json::Value PeerConnectionManager::hangUp(const std::string &peerid)
 						std::map<std::string, std::pair<rtc::scoped_refptr<webrtc::VideoTrackSourceInterface>, rtc::scoped_refptr<webrtc::AudioSourceInterface>>>::iterator it = m_stream_map.find(streamLabel);
 						if (it != m_stream_map.end())
 						{
+							webrtc::VideoTrackSourceInterface* video_stream = it->second.first.get();
+							std::lock_guard<std::mutex> mlock(m_video_stream_to_peerid_map_mutex);
+							auto video_stream_map_to_peerid_it = m_video_stream_to_peerid_map.find(video_stream);
+							if (video_stream_map_to_peerid_it != m_video_stream_to_peerid_map.end()) {
+								m_video_stream_to_peerid_map.erase(video_stream_map_to_peerid_it);
+							}
+
 							m_stream_map.erase(it);
 						}
 
 						RTC_LOG(LS_ERROR) << "hangUp stream closed " << streamLabel;
+					} else {
+						std::lock_guard<std::mutex> mlock(m_streamMapMutex);
+						std::map<std::string, std::pair<rtc::scoped_refptr<webrtc::VideoTrackSourceInterface>, rtc::scoped_refptr<webrtc::AudioSourceInterface>>>::iterator it = m_stream_map.find(streamLabel);
+						if (it != m_stream_map.end())
+						{
+							webrtc::VideoTrackSourceInterface* video_stream = it->second.first.get();
+							std::lock_guard<std::mutex> mlock(m_video_stream_to_peerid_map_mutex);
+							auto video_stream_map_to_peerid_it = m_video_stream_to_peerid_map.find(video_stream);
+							if (video_stream_map_to_peerid_it != m_video_stream_to_peerid_map.end()) {
+								video_stream_map_to_peerid_it->second.erase(peerid);
+							}
+						}
 					}
 
 					peerConnection->RemoveTrackOrError(stream);
@@ -1215,7 +1234,7 @@ const std::string PeerConnectionManager::sanitizeLabel(const std::string &label)
 /* ---------------------------------------------------------------------------
 **  Add a stream to a PeerConnection
 ** -------------------------------------------------------------------------*/
-bool PeerConnectionManager::AddStreams(webrtc::PeerConnectionInterface *peer_connection, const std::string &videourl, const std::string &audiourl, const std::string &options)
+bool PeerConnectionManager::AddStreams(webrtc::PeerConnectionInterface *peer_connection, const std::string &videourl, const std::string &audiourl, const std::string &options, const std::string &peerid)
 {
 	bool ret = false;
 
@@ -1304,6 +1323,7 @@ bool PeerConnectionManager::AddStreams(webrtc::PeerConnectionInterface *peer_con
 		RTC_LOG(LS_INFO) << "Adding Stream to map";
 		std::lock_guard<std::mutex> mlock(m_streamMapMutex);
 		m_stream_map[streamLabel] = std::make_pair(videoSource, audioSource);
+		m_video_stream_to_peerid_map[videoSource.get()].insert(peerid);
 	}
 
 	// create a new webrtc stream
